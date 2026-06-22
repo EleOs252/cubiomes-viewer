@@ -65,7 +65,7 @@ CONFIG(debug, debug|release): {
 
 # compile cubiomes
 CUPATH              = $$PWD/cubiomes
-QMAKE_PRE_LINK      += $(MAKE) -C $$CUPATH -f $$CUPATH/makefile CC=\"$$QMAKE_CC\" CFLAGS=\"$(CFLAGS) $$QMAKE_CFLAGS\" $$CUTARGET
+QMAKE_PRE_LINK      += $(MAKE) -C $$CUPATH -f $$PWD/cubiomes-makefile CC=\"$$QMAKE_CC\" CFLAGS=\"$(CFLAGS) $$QMAKE_CFLAGS\" $$CUTARGET
 QMAKE_CLEAN         += $$CUPATH/*.o $$CUPATH/libcubiomes.a
 LIBS                += $$CUPATH/libcubiomes.a -lm
 
