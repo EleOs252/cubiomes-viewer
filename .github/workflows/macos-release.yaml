@@ -2,10 +2,15 @@ name: macOS Release
 
 on:
   push:
-    branches:
-      - 'trunk'
     tags:
       - 'v*'
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
 
 env:
   PROG:         cubiomes-viewer
@@ -13,7 +18,7 @@ env:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Checkout repo
@@ -23,32 +28,37 @@ jobs:
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: 1
         with:
-          aqtversion:   '==3.1.*'
-          version:      '6.7.3'
+          version:      '5.15.2'
+          host:         'mac'
+          target:       'desktop'
+          arch:         'clang_64'
           archives:     'x86_64 qtbase qttools'
           cache:        true
+          setup-python: false
 
       - name: Build
         working-directory: ${{env.SOURCE_DIR}}
         run:  |
-              qmake CONFIG+=release ${{env.SOURCE_DIR}}
-              CFLAGS="-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" make
+              qmake CONFIG+=release
+              make -j$(sysctl -n hw.ncpu)
 
       - name: Deploy
         working-directory: ${{env.SOURCE_DIR}}
         run:  |
-              macdeployqt ${{env.PROG}}.app -dmg -no-plugins
+              macdeployqt ${{env.PROG}}.app -dmg
+              mv ${{env.PROG}}.dmg ${{env.PROG}}-${{github.ref_name}}-macos.dmg
 
-      - name: Test
-        working-directory: ${{env.SOURCE_DIR}}
-        run:  |
-              ./${{env.PROG}}.app/Contents/MacOS/${{env.PROG}} --version
-              otool -L ${{env.PROG}}.app/Contents/MacOS/${{env.PROG}}
-
-      - name: Save build artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: ${{env.PROG}}-macos
-          path: ${{env.SOURCE_DIR}}/${{env.PROG}}.dmg
-
+          name: Cubiomes Viewer ${{github.ref_name}}
+          body: |
+            Pre-built macOS binary for Minecraft 26.2.
+          files: |
+            ${{env.SOURCE_DIR}}/${{env.PROG}}-${{github.ref_name}}-macos.dmg
+          draft: false
+          prerelease: false

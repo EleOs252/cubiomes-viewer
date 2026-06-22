@@ -2,23 +2,24 @@ name: Windows Release
 
 on:
   push:
-    branches:
-      - 'trunk'
     tags:
       - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 defaults:
   run:
-    shell: cmd
+    shell: msys2 {0}
 
 env:
   PROG:         cubiomes-viewer
   SOURCE_DIR:   ${{github.workspace}}
 
-
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-2022
 
     steps:
       - name: Checkout repo
@@ -26,36 +27,50 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          aqtversion:   '==3.1.*'
-          version:      '5.15.2'
-          host:         'windows'
-          target:       'desktop'
-          arch:         'win64_mingw81'
-          archives:     'x86_64 qtbase qttools'
-          cache:        true
-          setup-python: false
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-qt5-static
+            git
 
-      - name: Build
+      - name: Build (static)
         working-directory: ${{env.SOURCE_DIR}}
+        shell: msys2 {0}
         run:  |
-              qmake CONFIG+=release ${{env.SOURCE_DIR}}
-              mingw32-make
-              
-      - name: Deploy
-        working-directory: ${{env.SOURCE_DIR}}
-        run:  |
-              mkdir ${{env.PROG}}
-              copy ${{env.SOURCE_DIR}}\release\${{env.PROG}}.exe ${{env.PROG}}
-              windeployqt --dir ${{env.PROG}} ${{env.SOURCE_DIR}}\release\${{env.PROG}}.exe --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw --no-angle
-              ${{env.SOURCE_DIR}}\${{env.PROG}}\${{env.PROG}}.exe --version
+              mkdir build && cd build
+              /mingw64/qt5-static/bin/qmake CONFIG+=release ..
+              mingw32-make -j$(nproc)
 
-      - name: Save build artifact
-        uses: actions/upload-artifact@v4
+      - name: Verify
+        working-directory: ${{env.SOURCE_DIR}}
+        shell: msys2 {0}
+        run:  |
+              build/release/${{env.PROG}}.exe --version
+              ls -lh build/release/${{env.PROG}}.exe
+
+      - name: Package
+        working-directory: ${{env.SOURCE_DIR}}
+        shell: powershell
+        run:  |
+              Copy-Item build\release\${{env.PROG}}.exe ${{env.PROG}}.exe
+              Compress-Archive -Path ${{env.PROG}}.exe -DestinationPath ${{env.PROG}}-${{github.ref_name}}-win64.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: ${{env.PROG}}-win
-          path: ${{env.SOURCE_DIR}}\${{env.PROG}}
+          name: Cubiomes Viewer ${{github.ref_name}}
+          body: |
+            Pre-built Windows binary for Minecraft 26.2.
+            Standalone executable ? no DLLs or dependencies required.
+          files: |
+            ${{env.SOURCE_DIR}}/${{env.PROG}}-${{github.ref_name}}-win64.zip
+          draft: false
+          prerelease: false
 
 
